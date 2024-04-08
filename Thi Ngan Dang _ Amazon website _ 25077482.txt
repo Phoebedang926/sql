@@ -1,0 +1,261 @@
+-- Sem1 Year 2023
+-- Student name: Thi Ngan Dang 
+-- Email: thingan.dang@student.uts.edu.au
+-- StudentID: 25077482
+-- The Amazon Ecommerce Database
+-- Amazon Ecommerce website in Australia: https://www.amazon.com.au/
+--
+-- This database describes the Amazon Ecommerce website
+-- Amazon is a multinational e-commerce and technology giant headquartered in Seattle, Washington. Founded in 1994 by Jeff Bezos, Amazon has grown to become one of the world's largest online retailers. It offers an extensive and diverse range of products, including books, electronics, apparel, and more, to customers worldwide. Known for its customer-centric approach and innovative technologies, Amazon has transformed the way people shop and access digital content. It has a significant global footprint, making it a dominant player in the retail and technology sectors.
+
+-- This SQL script defines the structure of a relational database for Amazon e-commerce platform. The database is responsible for storing and managing data related to users, products, orders, payments, categories, and their associations. It enables the website to handle user accounts, product listings, customer orders, order details (order lines), payment transactions, and product categorization. This database demonstrates the core functionality of the Amazon e-commerce website, allowing users to browse, search, purchase, and manage products and orders efficiently.
+
+DROP view ProductDetails CASCADE;
+DROP view UserOrderPayment CASCADE;
+
+DROP table WebUser CASCADE;
+DROP table Category CASCADE;
+DROP table Product CASCADE;
+DROP table WebOrder CASCADE;
+DROP table OrderLine CASCADE;
+DROP table Payment CASCADE;
+DROP table ProductCategory CASCADE;
+
+-- Create WebUser Table
+CREATE TABLE WebUser (
+    userID      serial,
+    username    VARCHAR(255)    NOT NULL,
+    email       VARCHAR(255)    UNIQUE NOT NULL,
+    password    VARCHAR(255)    NOT NULL,
+    name        VARCHAR(255),
+    address     TEXT,
+    phone       VARCHAR(20),
+
+    CONSTRAINT webuser_pk PRIMARY KEY (userID)
+);
+
+-- Create Category Table
+CREATE TABLE Category (
+    categoryID          serial,
+    cate_name           VARCHAR(255)    NOT NULL,
+    description         TEXT,
+    parentcategoryID    INT,
+
+    CONSTRAINT category_pk                PRIMARY KEY (categoryID),
+    CONSTRAINT category_fk_parentcategory FOREIGN KEY (parentcategoryID)    
+                                                     REFERENCES Category(categoryID) ON DELETE SET NULL
+);
+
+-- Create Product Table
+CREATE TABLE Product (
+    productID           serial,
+    product_name        VARCHAR(255)    NOT NULL,
+    description         TEXT,
+    price               DECIMAL(10, 2)  NOT NULL,
+    stock_qty           INT             NOT NULL,
+
+    CONSTRAINT product_pk  PRIMARY KEY (productID)
+);
+
+-- Create WebOrder Table
+CREATE TABLE WebOrder (
+    orderID         serial,
+    userID          INT,
+    order_date      TIMESTAMP       DEFAULT NOW(),
+    total_amount    DECIMAL(10, 2)  NOT NULL,
+    order_status    VARCHAR(20),
+    ship_address    TEXT,
+
+    CONSTRAINT weborder_pk          PRIMARY KEY (orderID),
+    CONSTRAINT weborder_fk_userid   FOREIGN KEY (userID)    
+                                            REFERENCES WebUser(userID) ON DELETE CASCADE,
+
+    CONSTRAINT weborder_check_status CHECK 
+                (order_status IN ('Placed', 'Shipping', 'Delivered'))
+);
+
+-- Create OrderLine Table
+CREATE TABLE OrderLine (
+    olineID     serial,
+    orderID     INT,
+    productID   INT,
+    qty         INT             NOT NULL,
+    unit_price  INT             NOT NULL,
+    subtotal    DECIMAL(10, 2)  NOT NULL,
+
+    CONSTRAINT orderline_pk         PRIMARY KEY (olineID, orderID),
+    CONSTRAINT orderline_fk_order   FOREIGN KEY (orderID)       
+                                            REFERENCES WebOrder(orderID)  ON DELETE CASCADE,
+    CONSTRAINT orderline_fk_product FOREIGN KEY (productID)     
+                                            REFERENCES Product(productID) ON DELETE RESTRICT,
+
+    CONSTRAINT orderline_check_qty CHECK (qty > 0)
+);
+
+-- Create Payment Table
+CREATE TABLE Payment (
+    paymentID   serial,
+    userID      INT,
+    orderID     INT,
+    pay_date    TIMESTAMP       DEFAULT NOW(),
+    pay_amount  DECIMAL(10, 2)  NOT NULL,
+    pay_status  VARCHAR(20),
+    pay_method  VARCHAR(50),
+
+    CONSTRAINT payment_pk           PRIMARY KEY (paymentID),
+    CONSTRAINT payment_fk_userid    FOREIGN KEY (userID)        
+                                            REFERENCES WebUser(userID)   ON DELETE CASCADE,
+    CONSTRAINT payment_fk_order     FOREIGN KEY (orderID)       
+                                            REFERENCES WebOrder(orderID) ON DELETE CASCADE,
+
+    CONSTRAINT payment_check_status CHECK 
+                (pay_status IN ('Pending', 'Completed', 'Failed'))
+);
+
+-- Create the ProductCategory junction table
+CREATE TABLE ProductCategory (
+    prdt_cateID     serial,
+    productID       INT,
+    categoryID      INT,
+
+    CONSTRAINT productcategory_pk           PRIMARY KEY (prdt_cateID),
+    CONSTRAINT productcategory_fk_product   FOREIGN KEY (productID)     
+                                                    REFERENCES Product(productID)   ON DELETE CASCADE,
+    CONSTRAINT productcategory_fk_category  FOREIGN KEY (categoryID)    
+                                                    REFERENCES Category(categoryID) ON DELETE CASCADE,
+    
+    CONSTRAINT productcategory_check_ids CHECK 
+                (productID IS NOT NULL AND categoryID IS NOT NULL)
+);
+
+-- Create a View to Show Product Details with Category
+CREATE VIEW ProductDetails AS
+SELECT
+    p.productID,
+    p.product_name,
+    p.description AS product_description,
+    p.price,
+    p.stock_qty,
+    c.cate_name AS category
+FROM Product p
+LEFT JOIN ProductCategory pc ON p.productID = pc.productID
+LEFT JOIN Category c ON pc.categoryID = c.categoryID;
+
+-- Create a View to Show User Orders with Payment Information
+CREATE VIEW UserOrderPayment AS
+SELECT
+    wu.userID AS user_id,
+    wu.username AS username,
+    wo.orderID AS order_id,
+    wo.order_date AS order_date,
+    wo.total_amount AS order_total_amount,
+    wo.order_status AS order_status,
+    p.pay_date AS payment_date,
+    p.pay_amount AS payment_amount,
+    p.pay_status AS payment_status
+FROM WebUser wu
+JOIN WebOrder wo ON wu.userID = wo.userID
+LEFT JOIN Payment p ON wo.orderID = p.orderID;
+
+
+-- Insert data into WebUser Table
+INSERT INTO WebUser (username, email, password, name, address, phone)
+VALUES
+    ('Mark Cuban', 'markcuban@example.com', 'password1', 'User One', '123 Main St, City', '555-123-4567'),
+    ('John Smith', 'johnsmith@example.com', 'password2', 'User Two', '456 Elm St, Town', '555-987-6543'),
+    ('Tom Do', 'tomdo@example.com', 'password3', 'User Three', '789 Oak St, Village', '555-456-7890');
+
+-- Insert data into Category Table
+INSERT INTO Category (cate_name, description, parentcategoryID)
+VALUES
+    ('Electronics', 'Electronic products', NULL),
+    ('Clothing', 'Apparel and accessories', NULL),
+    ('Electronics Accessories', 'Accessories for electronic products', 1),
+    ('Shoes', 'Footwear', NULL),
+    ('Furniture', 'Furniture for various purposes', NULL),      
+    ('Office Furniture', 'Furniture for office', 5);
+
+-- Insert data into Product Table
+INSERT INTO Product(product_name, description, price, stock_qty)
+VALUES
+    ('Laptop', 'Powerful laptop', 899.99, 50),
+    ('T-shirt', 'Comfortable cotton T-shirt', 19.99, 100),
+    ('Phone Case', 'Protective phone case', 9.99, 200),
+    ('Sneakers', 'Casual sneakers', 49.99, 75),
+    ('Laptop Stand', 'Adjustable Laptop Stand', 39.99, 100);
+
+-- Insert data into WebOrder Table
+INSERT INTO WebOrder (userID, total_amount, order_status, ship_address)
+VALUES
+    (1, 939.98, 'Placed', '123 Main St, City'),
+    (2, 19.99, 'Shipping', '456 Elm St, Town'),
+    (3, 9.99, 'Delivered', '789 Oak St, Village');
+
+-- Insert data into OrderLine Table
+INSERT INTO OrderLine (orderID, productID, qty, unit_price, subtotal)
+VALUES
+    (1, 1, 1, 899.99, 899.99),
+    (1, 5, 1, 39.99, 39.99),
+    (2, 2, 3, 19.99, 59.97),
+    (3, 3, 2, 9.99, 19.98);
+
+-- Insert data into Payment Table
+INSERT INTO Payment (userID, orderID, pay_amount, pay_status, pay_method)
+VALUES
+    (1, 1, 899.99, 'Completed', 'Credit Card'),
+    (2, 2, 59.97, 'Completed', 'PayPal'),
+    (3, 3, 19.98, 'Completed', 'Debit Card');
+
+-- Insert data into ProductCategory Table (Junction Table)
+INSERT INTO ProductCategory (productID, categoryID)
+VALUES
+    (1, 1),
+    (2, 2),
+    (3, 3),
+    (4, 4),
+    (5, 3),
+    (5, 6);
+
+
+-- Queries
+-- 1. A simple query of a single table.
+-- Show all information from the User table
+-- SELECT * FROM WebUser;
+
+-- 2. A query which uses the words "natural join".
+-- Retrieve a list of orders and their associated users using a natural join
+-- SELECT orderid, order_date, total_amount, order_status, ship_address, username, email    
+    FROM WebOrder   
+    NATURAL JOIN WebUser;
+
+-- 3. The cross product equivalent to the "natural join" query above.
+-- Retrieve a list of orders and their associated users using a cross join
+-- SELECT wo.orderID, wo.order_date, wo.total_amount, wo.order_status, wo.ship_address, wu.username, wu.email           
+    FROM WebOrder wo, WebUser wu    
+    WHERE wo.userID = wu.userID;
+
+
+-- 4. A query involving a “Group by”, perhaps also with a “HAVING”.
+-- Get the total order amount for each user and filter for users with total orders over $100
+-- SELECT wu.userID, wu.username, SUM(wo.total_amount) AS total_order_amount                            
+    FROM WebUser wu LEFT JOIN WebOrder wo   
+    ON wu.userID = wo.userID
+    GROUP BY wu.userID, wu.username     
+    HAVING SUM(wo.total_amount) > 100;
+
+-- 5. A query which uses a sub query.
+-- Find all products with a price greater than the average price of all products
+-- SELECT * FROM Product                
+    WHERE price > (SELECT AVG(price) FROM Product);
+
+-- 6. A cross product which cannot be implemented using the words “natural join” (e.g. self join)
+-- Find all categories and their parent categories (if any)
+-- SELECT c1.categoryID AS child_category_id,
+          c1.cate_name AS child_category_name,
+          c1.description AS child_category_description,
+          c1.parentcategoryID AS parent_category_id,
+          c2.cate_name AS parent_category_name
+    FROM Category c1
+    LEFT JOIN Category c2 ON c1.parentcategoryID = c2.categoryID;
+
+
